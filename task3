@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login and Signup System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            width: 400px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        input {
+            margin-bottom: 15px;
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px;
+            background-color: #007bff;
+            color: #fff;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .error {
+            color: red;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .success {
+            color: green;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Login and Signup</h2>
+
+        <?php
+        // Database Connection
+        $host = 'localhost';
+        $dbname = 'user_auth';
+        $username = 'root';
+        $password = '';
+
+        try {
+            $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        } catch (PDOException $e) {
+            die("Database connection failed: " . $e->getMessage());
+        }
+
+        // Error or Success Messages
+        $message = "";
+
+        // Handle Signup
+        if (isset($_POST['signup'])) {
+            $username = trim($_POST['username']);
+            $email = trim($_POST['email']);
+            $password = trim($_POST['password']);
+            $confirmPassword = trim($_POST['confirm_password']);
+
+            if (empty($username) || empty($email) || empty($password) || empty($confirmPassword)) {
+                $message = "<div class='error'>All fields are required.</div>";
+            } elseif ($password !== $confirmPassword) {
+                $message = "<div class='error'>Passwords do not match.</div>";
+            } else {
+                $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
+
+                $stmt = $pdo->prepare("INSERT INTO users (username, email, password, created_at) VALUES (:username, :email, :password, NOW())");
+                $stmt->bindParam(':username', $username);
+                $stmt->bindParam(':email', $email);
+                $stmt->bindParam(':password', $hashedPassword);
+
+                try {
+                    $stmt->execute();
+                    $message = "<div class='success'>Signup successful. You can now log in.</div>";
+                } catch (PDOException $e) {
+                    if ($e->getCode() == 23000) {
+                        $message = "<div class='error'>Email or username already exists.</div>";
+                    } else {
+                        $message = "<div class='error'>An error occurred: " . $e->getMessage() . "</div>";
+                    }
+                }
+            }
+        }
+
+        // Handle Login
+        if (isset($_POST['login'])) {
+            $emailOrUsername = trim($_POST['email_or_username']);
+            $password = trim($_POST['password']);
+
+            if (empty($emailOrUsername) || empty($password)) {
+                $message = "<div class='error'>All fields are required.</div>";
+            } else {
+                $stmt = $pdo->prepare("SELECT * FROM users WHERE email = :emailOrUsername OR username = :emailOrUsername LIMIT 1");
+                $stmt->bindParam(':emailOrUsername', $emailOrUsername);
+                $stmt->execute();
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($user && password_verify($password, $user['password'])) {
+                    session_start();
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    header("Location: protected_page.php");
+                    exit;
+                } else {
+                    $message = "<div class='error'>Invalid credentials.</div>";
+                }
+            }
+        }
+        ?>
+
+        <!-- Display Message -->
+        <?php echo $message; ?>
+
+        <!-- Signup Form -->
+        <form method="POST" action="">
+            <h3>Signup</h3>
+            <input type="text" name="username" placeholder="Username" required />
+            <input type="email" name="email" placeholder="Email" required />
+            <input type="password" name="password" placeholder="Password" required />
+            <input type="password" name="confirm_password" placeholder="Confirm Password" required />
+            <button type="submit" name="signup">Signup</button>
+        </form>
+
+        <!-- Login Form -->
+        <form method="POST" action="">
+            <h3>Login</h3>
+            <input type="text" name="email_or_username" placeholder="Email or Username" required />
+            <input type="password" name="password" placeholder="Password" required />
+            <button type="submit" name="login">Login</button>
+        </form>
+    </div>
+</body>
+</html>
